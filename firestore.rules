@@ -1,0 +1,76 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: uid, email, displayName, photoURL, createdAt
+    //
+    // Collection: courses
+    // Fields: id, teacherId, title, code, description, semester, year, createdAt, updatedAt
+    //
+    // Collection: courses/{courseId}/materials
+    // Fields: id, courseId, title, type, url, content, createdAt
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isCourseOwner(courseId) {
+      return isAuthenticated() && request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidCourse(data) {
+      return data.keys().hasAll(['teacherId', 'title']) &&
+             data.teacherId == request.auth.uid &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200;
+    }
+
+    function isValidMaterial(data) {
+      return data.keys().hasAll(['courseId', 'title', 'type']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.type in ['link', 'file', 'note'];
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) && (request.method == 'GET' || isValidUser(request.resource.data));
+    }
+
+    match /courses/{courseId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.teacherId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidCourse(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.teacherId == request.auth.uid && isValidCourse(request.resource.data);
+      allow delete: if isAuthenticated() && resource.data.teacherId == request.auth.uid;
+
+      match /materials/{materialId} {
+        allow read: if isAuthenticated() && isCourseOwner(courseId);
+        allow create: if isAuthenticated() && isCourseOwner(courseId) && isValidMaterial(request.resource.data);
+        allow update: if isAuthenticated() && isCourseOwner(courseId) && isValidMaterial(request.resource.data);
+        allow delete: if isAuthenticated() && isCourseOwner(courseId);
+      }
+    }
+  }
+}
