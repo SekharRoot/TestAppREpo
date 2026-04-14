@@ -35,8 +35,7 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email']) &&
              data.uid is string &&
-             data.email is string &&
-             data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+             data.email is string;
     }
 
     function isValidCourse(data) {
@@ -56,11 +55,13 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      allow read, write: if isOwner(userId) && (request.method == 'GET' || isValidUser(request.resource.data));
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if isOwner(userId);
     }
 
     match /courses/{courseId} {
-      allow read: if isAuthenticated() && (resource == null || resource.data.teacherId == request.auth.uid);
+      allow read: if isAuthenticated() && resource.data.teacherId == request.auth.uid;
       allow create: if isAuthenticated() && isValidCourse(request.resource.data);
       allow update: if isAuthenticated() && resource.data.teacherId == request.auth.uid && isValidCourse(request.resource.data);
       allow delete: if isAuthenticated() && resource.data.teacherId == request.auth.uid;

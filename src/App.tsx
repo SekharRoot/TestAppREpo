@@ -114,9 +114,9 @@ export default function App() {
         if (!userSnap.exists()) {
           await setDoc(userRef, {
             uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-            photoURL: user.photoURL,
+            email: user.email || '',
+            displayName: user.displayName || '',
+            photoURL: user.photoURL || '',
             createdAt: new Date().toISOString()
           });
         }
